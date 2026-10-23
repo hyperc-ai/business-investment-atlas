@@ -1,4 +1,5 @@
 'use client';
+import { NumberField } from '@/components/number-field';
 import { type Scenario, formatMoney } from './model';
 import { calculateEconomics, DEFAULT_ECONOMICS, ECONOMIC_FIELDS, type EconomicSettings, type EconomicMetrics, type EconomicKey } from './economics';
 const pct = (n: number) => `${(n*100).toFixed(2)}%`;
@@ -28,7 +29,7 @@ export function EconomicWorkbench({scenario,settings,metrics,onChange,onScenario
     </div>
     <details className="assumption-editor economic-details"><summary><span>Configure economics & inspect every gate</span><small>Costs · evidence · inflation · risk · time</small></summary>
       <div className="assumption-editor-body">
-        <div className="economic-controls">{ECONOMIC_FIELDS.map(field=><label className="economic-field" key={field.key}><span>{field.label}<em>{field.unit}</em></span><input aria-label={field.label} type="number" min={field.min} max={field.max} step={field.step} value={settings[field.key]} onChange={event=>{const n=event.currentTarget.valueAsNumber;if(Number.isFinite(n))onChange({...settings,[field.key]:Math.min(field.max,Math.max(field.min,n))});}}/><small>{field.note}</small></label>)}</div>
+        <div className="economic-controls">{ECONOMIC_FIELDS.map(field=><label className="economic-field" key={field.key}><span>{field.label}<em>{field.unit}</em></span><NumberField aria-label={field.label} min={field.min} max={field.max} step={field.step} value={settings[field.key]} onValueChange={value=>onChange({...settings,[field.key]:value})}/><small>{field.note}</small></label>)}</div>
         <div className="economic-detail-grid">
           <div><h4>The bridge from margin to survival</h4><dl>
             <dt>Operating saving</dt><dd>{pct(e.saving)} points per deal</dd>

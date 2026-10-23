@@ -60,7 +60,7 @@ Requires Node.js ≥ 22.13 (tested with Node 24).
 
 ```sh
 npm ci
-npm test          # 13 numerical checks of the economic model
+npm test          # 13 economic-model checks + 9 model/helper checks
 npm run dev       # http://127.0.0.1:5173/research/business-investment-atlas/
 npm run build     # type-check + production build into dist/
 npm run preview   # serve dist/ the way production does
@@ -83,8 +83,10 @@ ATLAS_BASE_PATH=/ npm run build
 | `app/model.ts` | Structural classifier, regulatory and market-capacity heuristics, axes, movement solver |
 | `app/economics.ts` | Economic equations and default settings |
 | `app/globals.css` | Page styling (Tailwind v4 theme) |
-| `components/ui/`, `lib/` | Select, slider, switch and tooltip primitives (Radix) |
-| `tests/economics.test.mjs` | The model checks |
+| `components/ui/`, `lib/utils.ts` | Select, slider, switch and tooltip primitives (Radix) |
+| `components/number-field.tsx`, `lib/number-draft.ts` | Number inputs that keep what is typed (see below) |
+| `tests/economics.test.mjs`, `tests/model.test.mjs` | Unit checks of the economic model, the classifier and the input helpers |
+| `e2e/atlas.spec.ts`, `playwright.config.ts` | Browser tests, locally and against the live page |
 | [`docs/MODEL.md`](docs/MODEL.md) | Equations, units, constraints, assumptions and limitations |
 | [`docs/RESEARCH_SOURCES.md`](docs/RESEARCH_SOURCES.md) | Primary references and how each one informed the model |
 
@@ -107,6 +109,28 @@ ATLAS_BASE_PATH=/ npm run build
 13. Score, NPV and risk stay finite across the full coordinate grid and setting extremes.
 
 With default assumptions, the robot's initial net edge is 3.70% per deal against 0.50% for the human counterfactual. The conservative five-year NPV is about **+$826,700**, against about −$2.44M for the human. These numbers are a reproducibility fixture, not a forecast.
+
+## Browser tests
+
+`e2e/atlas.spec.ts` drives the real page in Chromium, at desktop size and as a phone (Pixel 7, touch):
+
+```sh
+npx playwright install chromium   # once
+npm run test:e2e                  # builds, serves dist/ with vite preview, runs the suite
+npm run test:live                 # the same suite against hyperc.com/research/business-investment-atlas/
+ATLAS_URL=https://example.org/atlas/ npx playwright test   # any other deployment
+```
+
+They cover:
+
+- loading without errors or failed requests, the default fixture, and fitting the screen;
+- slider names and keyboard steps;
+- typed values in the exact-value, economic and coefficient fields, including negatives, decimals, out-of-range entries and an emptied field;
+- the reset buttons, presets, funding comparison, lens switch, layer switch, suggested slices and axis pickers;
+- chart click and tap;
+- on a phone, a vertical swipe over a chart scrolls the page, and a sideways drag moves the point.
+
+On the deployed page they also check hyperc.com's return bar and that its consent banner stays readable. Live runs block every third-party request and decline the consent banner, so they send nothing to analytics and submit nothing. CI runs the suite on every push. [Live check](.github/workflows/live.yml) runs it against hyperc.com daily and on demand.
 
 ## Credits
 

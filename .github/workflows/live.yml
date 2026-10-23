@@ -1,0 +1,37 @@
+name: Live check
+
+# Runs the browser suite against the deployed page. Third-party requests are
+# blocked and the consent banner is declined, so a run sends nothing to
+# analytics and submits nothing.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Page to test (defaults to the hyperc.com deployment)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:live
+        env:
+          ATLAS_URL: ${{ inputs.url }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14

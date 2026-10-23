@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { NumberField } from "@/components/number-field";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -45,7 +46,7 @@ import {
   axisDefinition,
   businessLogit,
   calculateMetrics,
-  capitalDollars,
+  exactAxis,
   formatAxisValue,
   formatMoney,
   legalSignals,
@@ -280,6 +281,10 @@ function HeatMap({
   const solverArrowId = `arrow-solver-${chartId}`;
   const feasibleArrowId = `arrow-feasible-${chartId}`;
   const svgRef = useRef<SVGSVGElement>(null);
+  // A touch only moves the point once it is a tap or a sideways drag: the chart
+  // lets the browser scroll vertically (touch-action: pan-y), so a swipe that
+  // starts on a chart scrolls the page instead of rewriting the scenario.
+  const touchRef = useRef<{ id: number; x: number; y: number; dragging: boolean } | null>(null);
   const [hover, setHover] = useState<{
     x: number;
     y: number;
@@ -433,10 +438,33 @@ function HeatMap({
         className="heat-map"
         role="img"
         aria-label={`Interactive slice: ${axisDefinition(xAxis).label} by ${axisDefinition(yAxis).label}`}
-        onPointerMove={(event) => readPointer(event, event.buttons === 1)}
+        onPointerMove={(event) => {
+          if (event.pointerType !== "touch") return readPointer(event, event.buttons === 1);
+          const touch = touchRef.current;
+          if (!touch || touch.id !== event.pointerId) return;
+          const dx = Math.abs(event.clientX - touch.x);
+          const dy = Math.abs(event.clientY - touch.y);
+          if (!touch.dragging && (dx < 8 || dx <= dy)) return;
+          touch.dragging = true;
+          readPointer(event, true);
+        }}
         onPointerDown={(event) => {
+          if (!event.isPrimary) return;
+          if (event.pointerType === "touch") {
+            touchRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, dragging: false };
+            return;
+          }
           event.currentTarget.setPointerCapture(event.pointerId);
           readPointer(event, true);
+        }}
+        onPointerUp={(event) => {
+          if (event.pointerType !== "touch" || touchRef.current?.id !== event.pointerId) return;
+          touchRef.current = null;
+          readPointer(event, true);
+        }}
+        onPointerCancel={() => {
+          touchRef.current = null;
+          setHover(null);
         }}
         onPointerLeave={() => setHover(null)}
       >
@@ -798,11 +826,7 @@ function AxisControl({
   onChange: (value: number) => void;
 }) {
   const definition = axisDefinition(axis);
-  const physical = axis === "capital" || axis === "resources" ? {value:capitalDollars(value),min:1000,max:1e10,step:1000,unit:"Exact $",coordinate:(v:number)=>(Math.log10(v)-3)/7*100}
-    : axis === "edge" ? {value:-5+.2*value,min:-5,max:15,step:.001,unit:"Exact %",coordinate:(v:number)=>(v+5)/.2}
-    : axis === "flow" ? {value:10**(value/25)-1,min:0,max:9999,step:1,unit:"Deals / year",coordinate:(v:number)=>Math.log10(v+1)*25}
-    : axis === "horizon" ? {value:Math.round(1+29*value/100),min:1,max:30,step:1,unit:"Years",coordinate:(v:number)=>(Math.round(v)-1)/29*100}
-    : axis === "efficiency" ? {value,min:0,max:100,step:.1,unit:"Saving %",coordinate:(v:number)=>v} : null;
+  const exact = exactAxis(axis);
   return (
     <div className={`axis-control ${activeCount ? "axis-control-active" : ""}`}>
       <div className="axis-control-head">
@@ -821,13 +845,26 @@ function AxisControl({
         step={1}
         onValueChange={(next) => onChange(next[0])}
         aria-label={definition.label}
+        aria-valuetext={formatAxisValue(axis, value)}
         className="atlas-slider"
       />
       <div className="axis-control-range">
         <span>{definition.low.split(" · ")[1]}</span>
         <span>{definition.high.split(" · ")[1]}</span>
       </div>
-      {physical && <label className="exact-coordinate"><span>{physical.unit}</span><input type="number" aria-label={`${definition.label} exact value`} min={physical.min} max={physical.max} step={physical.step} value={Math.round(physical.value*1000)/1000} onChange={event=>{const n=event.currentTarget.valueAsNumber;if(Number.isFinite(n))onChange(physical.coordinate(Math.min(physical.max,Math.max(physical.min,n))));}} /></label>}
+      {exact && (
+        <label className="exact-coordinate">
+          <span>{exact.unit}</span>
+          <NumberField
+            aria-label={`${definition.label} exact value`}
+            min={exact.min}
+            max={exact.max}
+            step={exact.step}
+            value={Math.round(exact.value(value) * 1000) / 1000}
+            onValueChange={(next) => onChange(exact.coordinate(next))}
+          />
+        </label>
+      )}
     </div>
   );
 }
@@ -847,16 +884,12 @@ function AssumptionField({
         <strong>{item.symbol}</strong>
         {item.label}
       </span>
-      <input
-        type="number"
+      <NumberField
         min={-5}
         max={5}
         step={0.05}
         value={value}
-        onChange={(event) => {
-          const next = event.currentTarget.valueAsNumber;
-          if (Number.isFinite(next)) onChange(Math.max(-5, Math.min(5, next)));
-        }}
+        onValueChange={onChange}
         aria-label={`${item.label} coefficient`}
       />
     </label>

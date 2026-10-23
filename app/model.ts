@@ -304,12 +304,47 @@ export function formatMoney(value: number) {
 }
 
 export function formatAxisValue(key: AxisKey, value: number, compact = false) {
-  if (key === "edge") return `${(grossEdge(value)*100).toFixed(2)}%`;
+  if (key === "edge") {
+    // Two decimals, or three when that is what was entered (0.001% must not read as 0.00%).
+    const percent = grossEdge(value) * 100;
+    const two = percent.toFixed(2);
+    return `${Math.abs(Number(two) - percent) > 5e-4 ? percent.toFixed(3) : two}%`;
+  }
   if (key === "flow") return `${opportunityRate(value).toFixed(0)} / yr`;
   if (key === "horizon") return `${horizonYears(value)} yr`;
   if (key === "efficiency") return `${Math.round(value)}%`;
   if (key === "capital" || key === "resources") return formatMoney(capitalDollars(value));
   return compact ? `${Math.round(value)}` : `${Math.round(value)} / 100`;
+}
+
+export type ExactAxis = {
+  unit: string;
+  min: number;
+  max: number;
+  step: number;
+  /** Physical value (dollars, percent, deals, years) at a 0–100 coordinate. */
+  value: (coordinate: number) => number;
+  /** The 0–100 coordinate for a physical value inside [min, max]. */
+  coordinate: (value: number) => number;
+};
+
+/** Axes that can also be set by typing their physical value. */
+export function exactAxis(key: AxisKey): ExactAxis | null {
+  switch (key) {
+    case "capital":
+    case "resources":
+      return { unit: "Exact $", min: 1000, max: 1e10, step: 1000, value: capitalDollars, coordinate: (v) => ((Math.log10(v) - 3) / 7) * 100 };
+    case "edge":
+      return { unit: "Exact %", min: -5, max: 15, step: 0.001, value: (c) => grossEdge(c) * 100, coordinate: (v) => (v + 5) / 0.2 };
+    case "flow":
+      return { unit: "Deals / year", min: 0, max: 9999, step: 1, value: opportunityRate, coordinate: (v) => Math.log10(v + 1) * 25 };
+    case "horizon":
+      return { unit: "Years", min: 1, max: 30, step: 1, value: horizonYears, coordinate: (v) => ((Math.round(v) - 1) / 29) * 100 };
+    case "efficiency":
+      return { unit: "Saving %", min: 0, max: 100, step: 0.1, value: (c) => c, coordinate: (v) => v };
+    default:
+      return null;
+  }
 }
 
 export function axisDefinition(key: AxisKey) {
